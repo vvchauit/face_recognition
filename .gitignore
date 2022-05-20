@@ -127,3 +127,12 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+storage/model/mask_detection_model/mask_detector.h5
+.gitignore
+storage/model/landmark_model/face_landmark.tflite
+storage/model/feature_extraction_model/vgg_face_weights.h5
+storage/model/feature_extraction_model/inceptionresnet512_weights.h5
+storage/model/face_detection_model/deploy.prototxt
+storage/model/face_detection_model/res10_300x300_ssd_iter_140000.caffemodel
+storage/dataset.npz
+storage/.DS_Store
