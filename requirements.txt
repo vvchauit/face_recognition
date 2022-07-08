@@ -1,0 +1,10 @@
+opencv-python
+cmake
+tensorflow
+Pillow
+tk
+gdown
+imutils
+torch
+xlsxwriter
+matplotlib
