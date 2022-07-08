@@ -1,3 +1,4 @@
+# Chau Van Van-MITIU20104:
 # references:
 # 	https://medium.com/the-owl/building-inception-resnet-v2-in-keras-from-scratch-a3546c4d93f0
 # 	https://github.com/serengil/deepface/blob/master/deepface/basemodels/Facenet.py
