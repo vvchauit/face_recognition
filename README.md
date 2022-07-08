@@ -1,1 +1,0 @@
-/Users/macbook/Desktop/face_recognition/env/bin/python3 /Users/macbook/Desktop/face_recognition/winApp.py
