@@ -128,3 +128,4 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+models/feature_extraction_model/inceptionresnetv2_512_weights.h5
