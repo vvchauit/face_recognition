@@ -1,6 +1,6 @@
 opencv-python
 cmake
-tensorflow-macos
+tensorflow
 Pillow
 tk
 gdown

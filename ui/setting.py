@@ -31,4 +31,4 @@ FONT='ui/fonts/arial.ttc'
 INSTRUCTOR = ['Please look straight at camera','Please turn left your head','Please turn right your head','Please raised your head','Please raised and turn left your head','Please raised and turn right your head','Please nod your head','Please nod and turn left your head','Please nod and turn right your head','Please move your head inside the circle']
 INSTRUCTOR_TIME = 20.0
 
-tthd = 'ĐHQG.TPHCM-Trường đại học Quốc Tế-Khoa CNTT'
+tthd = 'VIETNAM NATIONAL UNIVERSITY OF HOCHIMINH CITY\n THE INTERNATIONAL UNIVERSITY\n SCHOOL OF COMPUTER SCIENCE AND ENGINEERING\n\n Thesis:"A research for face recognition based on deep learning technique and its application in human resources management"\n by Chau Van Van, Year 2022\n Approved by: Nguyen Van Sinh, Assoc. Prof, PhD'

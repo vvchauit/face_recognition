@@ -1,9 +1,10 @@
-from models.feature_extraction_model.inceptionresnetv2 import get_model
+# from models.feature_extraction_model.inceptionresnetv2 import get_model
 
+# # tạo model
+# model = get_model('models/feature_extraction_model/inceptionresnetv2_512_weights_.h5')
 
-# tạo model
-model = get_model('models/feature_extraction_model/inceptionresnetv2_512_weights.h5')
-
+from keras.models import load_model
+model = load_model(r'models\feature_extraction_model\new.h5')
 
 # xác định kích thước ngõ vào model
 input_shape = model.layers[0].input_shape
@@ -79,5 +80,6 @@ def feature_extraction(face_pixels):
 	samples = np.expand_dims(image,axis=0)
 	# trích xuất đặc trưng ảnh
 	yhat = model.predict(samples)
+	# yhat /= np.linalg.norm(yhat, axis=1, keepdims=True)
 	embedding = yhat[0]
 	return embedding
