@@ -129,3 +129,7 @@ dmypy.json
 .pyre/
 
 models/feature_extraction_model/inceptionresnetv2_512_weights.h5
+models/feature_extraction_model/inceptionResnetV2_512.h5
+dataset/tripletloss_embs.npy
+.gitignore
+dataset/arcface_head_embs.npy
