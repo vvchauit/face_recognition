@@ -28,7 +28,9 @@ STATUS = ['check-in', 'check-out', 'check-out']
 
 FONT='ui/fonts/arial.ttc'
 
-INSTRUCTOR = ['Please look straight at camera','Please turn left your head','Please turn right your head','Please raised your head','Please raised and turn left your head','Please raised and turn right your head','Please nod your head','Please nod and turn left your head','Please nod and turn right your head','Please move your head inside the circle']
+#INSTRUCTOR = ['Please look straight at camera','Please turn left your head','Please turn right your head','Please raised your head','Please raised and turn left your head','Please raised and turn right your head','Please nod your head','Please nod and turn left your head','Please nod and turn right your head','Please move your head inside the circle']
+INSTRUCTOR = ['Hãy nhìn thẳng vào máy ảnh ',' Hãy quay đầu sang trái ',' Hãy quay đầu sang phải ',' Hãy ngẩng đầu lên ',' Hãy ngẩng lên và quay đầu sang trái ',' Hãy ngẩng cao đầu và quay đầu sang phải ', 'Hãy gật đầu', 'Hãy gật đầu và quay đầu sang trái', 'Hãy gật đầu và quay đầu sang phải', 'Hãy quay đầu vào trong vòng tròn']
+
 INSTRUCTOR_TIME = 20.0
 
-tthd = 'VIETNAM NATIONAL UNIVERSITY OF HOCHIMINH CITY\n THE INTERNATIONAL UNIVERSITY\n SCHOOL OF COMPUTER SCIENCE AND ENGINEERING\n\n Thesis:"A research for face recognition based on deep learning technique and its application in human resources management"\n by Chau Van Van, Year 2022\n Approved by: Nguyen Van Sinh, Assoc. Prof, PhD'
+tthd ='VIETNAM NATIONAL UNIVERSITY OF HOCHIMINH CITY\n THE INTERNATIONAL UNIVERSITY\n SCHOOL OF COMPUTER SCIENCE AND ENGINEERING\n\n Thesis:"A research for face recognition based on deep learning technique and its application in human resources management"\n by Chau Van Van, Year 2022\n Approved by: Nguyen Van Sinh, Assoc. Prof, PhD'

@@ -1,21 +1,22 @@
 import tensorflow as tf
 import keras
 import os
+cwd = os.getcwd()
 import sys
-sys.path.append(r'D:\sw\face_rec\face_reg_new_ui')
-from models.feature_extraction_model.inceptionresnetv2 import get_train_model
+sys.path.append(cwd)
 from keras.models import Model, load_model
 from keras.utils import Sequence
 from train.arcface_metrics import ArcFace
-from keras.layers import Input
+from keras.layers import Input, BatchNormalization, Dropout, Flatten, Dense
+from keras.applications.inception_resnet_v2 import InceptionResNetV2
 import numpy as np
 import cv2
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 EPOCHS = 200
-BATCH_SIZE = 256
-DATA_DIR = ''
+BATCH_SIZE = 1
+DATA_DIR = r'D:\sw\face_rec\data\celeb_vn\celeb_vn_processed'
 RESULTS_DIR = 'train/results'
 
 print('INFO: TRAIN MODEL')
@@ -32,19 +33,20 @@ for i, fld_name in enumerate(os.listdir(DATA_DIR)):
     fld_path = os.path.join(DATA_DIR, fld_name)
     for f_name in os.listdir(fld_path):
         f_path = os.path.join(fld_path, f_name)
-        x_train.append(cv2.resize(cv2.imread(f_path), (160, 160))/255.0)
+        x_train.append(f_path)
         labels.append(i)
 labels = np.array(labels)
 y_train = tf.keras.utils.to_categorical(labels, num_classes=num_class, dtype='int32')
 del labels
-x_train = np.array(x_train, dtype='float32')
 
 class DataGenerator(Sequence):
-    def __init__(self, x_train, y_train, batch_size=32, shuffle=True):
+    def __init__(self, x_train, y_train, batch_size=32, shuffle=True, is_path=False, image_shape=(160,160, 3)):
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.x_train = x_train
         self.y_train = y_train
+        self.is_path = is_path
+        self.image_shape = image_shape
         self.img_indexes = np.arange(len(self.x_train))
         self.on_epoch_end()
         
@@ -70,26 +72,38 @@ class DataGenerator(Sequence):
         if self.shuffle == True:
             np.random.shuffle(self.indexes)
 
+    def __load_img(self, img_path):
+        return cv2.resize(cv2.imread(img_path), (self.image_shape[0], self.image_shape[1]))
+
     def __data_generation(self, list_IDs_temps):
+        if self.is_path:
+            X = []
+            for ID in list_IDs_temps:
+                x = self.__load_img(self.x_train[ID])
+                X.append((x/255).astype('float32'))
+            X = np.array(X, dtype='float32')
+            return X, self.y_train[list_IDs_temps]
         return self.x_train[list_IDs_temps], self.y_train[list_IDs_temps]
 
 print('INFO: Create model')
-model = get_train_model(num_class)
-
-
-inputs = Input(shape=(160, 160, 3))
-labels = Input(shape=(num_class,))
-
-base_model = get_train_model(num_class)
-extract_model = Model(base_model.inputs, base_model.layers[-2].output)
-x = extract_model(inputs)
-output = ArcFace(n_classes=num_class)([x, labels])
-model = Model([inputs, labels], output)
+input_shape = (160, 160, 3)
+input = Input(shape=input_shape)
+label = Input(shape=(num_class,))
+base_model = InceptionResNetV2(include_top=False, weights="imagenet", input_shape=input_shape)
+base_model.trainable = False
+arcface_model = base_model(input)
+arcface_model = BatchNormalization(momentum=0.9, epsilon=2e-5)(arcface_model)
+arcface_model = Dropout(0.4)(arcface_model)
+arcface_model = Flatten()(arcface_model)
+arcface_model = Dense(512, activation=None, use_bias=True, kernel_initializer="glorot_normal")(arcface_model)
+embedding = BatchNormalization(momentum=0.9, epsilon=2e-5, name="embedding", scale=True)(arcface_model)
+output = ArcFace(n_classes=num_class)([embedding, label])
+model = Model([input, label], output)
 
 print('INFO: Compile model')
 model.compile(loss='categorical_crossentropy',optimizer='Adam', metrics=['acc'])
 
-cp = keras.callbacks.ModelCheckpoint(os.path.join(RESULTS_DIR, "check_point_lfw.h5"), monitor='loss', verbose=1, save_best_only=True, save_weights_only=False, mode='min'),
+cp = keras.callbacks.ModelCheckpoint(os.path.join(RESULTS_DIR, "cp_inceptionResnetV2_arcface_head.h5"), monitor='loss', verbose=1, save_best_only=True, save_weights_only=False, mode='min'),
 
 callbacks = [
     cp,
@@ -97,7 +111,7 @@ callbacks = [
 
 model.summary()
 
-train_generator = DataGenerator(x_train, y_train, batch_size=BATCH_SIZE)
+train_generator = DataGenerator(x_train, y_train, batch_size=BATCH_SIZE, shuffle=True, is_path=True)
 history = model.fit_generator(
     train_generator,
     steps_per_epoch = len(train_generator),
@@ -105,4 +119,4 @@ history = model.fit_generator(
     callbacks = callbacks,
 )
 
-model.save(os.path.join(RESULTS_DIR, "final_lfw.h5"))
+model.save(os.path.join(RESULTS_DIR, "final_inceptionResnetV2_arcface_head.h5"))

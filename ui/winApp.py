@@ -1,5 +1,7 @@
+import os
+cwd = os.getcwd()
 import sys
-sys.path.append(r'D:\sw-work\face_recognition\face_reg_new_ui')
+sys.path.append(cwd)
 import tkinter as tk
 from tkinter import *
 from tkinter import ttk
@@ -287,14 +289,18 @@ class WebCam(ttk.Frame):
     def get_bbox_layer(self):
         is_true, frame = self.get_frame()
         if is_true:
-            faces_loc_list, face_loc_margin_list = face_detector(frame)
+            faces_loc_list = face_detector(frame)
             blank_image = np.zeros((frame.shape[0],frame.shape[1],3), np.uint8)
-            if faces_loc_list and face_loc_margin_list:
+            if faces_loc_list:
                 self.cf_ids = []
                 bbox_layer = blank_image.copy()
-                for i,(x,y,w,h) in enumerate(face_loc_margin_list):
+                for i,(x,y,w,h) in enumerate(faces_loc_list):
+                    try:
+                        face_parts, face_angle, layer = get_face(frame, (x,y,w,h))
+                    except:
+                        bbox_layer = roi(frame, bbox_layer)
+                        continue
                     bbox_layer = draw_bbox(bbox_layer,(x,y,w,h), (0,255,0), 2, 10)
-                    face_parts, face_angle, layer = get_face(frame,faces_loc_list[i] ,(x,y,w,h))
                     self.master.is_mask_recog = mask_detector(face_parts[0])[0]
                     id_, label, extender, face = self.classifier(face_parts, self.master.is_mask_recog)
                     info = label + ' ' + extender
@@ -351,12 +357,14 @@ class WebCam(ttk.Frame):
         img[y:y+100, x:x+100] = face
         return img
 
-    def get_frame(self):
+    def get_frame(self, is_flip=True):
         self.master.new_day_reset()
         if self.vid.isOpened():
             is_true, frame = self.vid.read()
             # frame = cv2.imread('C:/Users/trong/Downloads/trump2.jpg')
             frame = resize_frame(self.master, frame)
+            if is_flip:
+                frame = cv2.flip(frame, 1)
             if is_true:
                 return (is_true, cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             else:
@@ -379,12 +387,14 @@ class WebCam(ttk.Frame):
         else:
             row = 'EMB'
             audit_feature = feature_extraction(face_parts[0])
+        t1 = time.process_time()
         query = 'SELECT ' + row + ' FROM EMP_EMBS'
         feature_db = []
         for emb in self.master.cur.execute(query).fetchall():
             feature = json2array(emb[0], np.float32)
             feature_db.append(feature)
-        max_index, max_prob = predict_cosine(audit_feature, feature_db)
+        max_index, max_prob, min_dist, min_index = predict_cosine(audit_feature, feature_db)
+        print("Predict time: {} (s)".format(time.process_time()-t1))
         if max_prob >= THRESHOLD:
             id_ = self.master.cur.execute('''SELECT EMP_ID FROM EMP_EMBS''').fetchall()[max_index][0]
             label = self.master.cur.execute('''SELECT EMP_NAME FROM EMPLOYESS WHERE EMP_ID = ?''', ([id_])).fetchall()[0][0]
@@ -464,7 +474,7 @@ def user_create(master, emp_name, emp_dept_id=0):
     master.cur.execute('''INSERT INTO EMPLOYESS (EMP_NAME, EMP_DEPT_ID) VALUES (?, ?)''', (emp_name, emp_dept_id))
     master.con.commit()
     emp_id = master.cur.lastrowid
-    master.right_frames['RightFrame2'].user_list_frame.reload_user_list()
+    master.right_frames['RightFrame2'].user_list_frame.add_user(emp_id)
     master.right_frames['RightFrame3'].reload_user_list()
     return str(emp_id)
 
@@ -474,7 +484,7 @@ def append_dataset(master, face, emb, masked_emb, emp_id):
     masked_emb_json = json.dumps(masked_emb.tolist())
     master.cur.execute('''INSERT INTO EMP_EMBS (EMP_ID, FACE, EMB, MASKED_EMB) VALUES (?, ?, ?, ?)''', (emp_id, face_json, emb_json, masked_emb_json))
     master.con.commit()
-    master.right_frames['RightFrame2'].user_list_frame.reload_user_list()
+    master.right_frames['RightFrame2'].user_list_frame.update_user(emp_id)
     master.right_frames['RightFrame3'].reload_user_list()
 
 def empty_user(master, emp_id):
@@ -494,10 +504,10 @@ def user_remove(master, emp_id):
     if flag == True:
         empty_user(master, emp_id)
         empty_cico(master, emp_id)
+        master.right_frames['RightFrame2'].user_list_frame.remove_user(emp_id)
+        master.right_frames['RightFrame3'].reload_user_list()
         master.cur.execute('''DELETE FROM EMPLOYESS WHERE EMP_ID=?''', ([emp_id]))
         master.con.commit()
-    master.right_frames['RightFrame2'].user_list_frame.reload_user_list()
-    master.right_frames['RightFrame3'].reload_user_list()
 
 def empty_cico(master, emp_id):
     flag = False
@@ -661,7 +671,7 @@ class RegistrationPage(ttk.Frame):
             self.choose_frame(3)
     
     def browse_files(self, event):
-        file_path_list  = askopenfilenames(initialdir='C:/Users/%s/Desktop'%getpass.getuser(),filetypes=[('Image Files','*jpeg;*jpg;*png'),("All files","*.*")])
+        file_path_list  = askopenfilenames(initialdir='C:/Users/%s/Desktop'%getpass.getuser(),filetypes=[('Image Files',('jpeg','jpg','png')),("All files","*.*")])
         images = []
         for file_path in file_path_list:
             if file_path.lower().endswith(('.png','.jpg','.jpeg')):
@@ -670,12 +680,15 @@ class RegistrationPage(ttk.Frame):
         if images:
             for image in images:
                 first_flag = True
-                faces_loc_list, faces_loc_margin_list = face_detector(image)
-                if faces_loc_list and faces_loc_margin_list:
+                faces_loc_list = face_detector(image)
+                if faces_loc_list:
                     if first_flag:
                         empty_user(self.master, self.id)
                         first_flag == False
-                    face_parts, face_angle, layer = get_face(image,faces_loc_list[0] ,faces_loc_margin_list[0])
+                    try:
+                        face_parts, face_angle, layer = get_face(image,faces_loc_list[0])
+                    except:
+                        continue
                     feature_masked = []
                     for i,face_part in enumerate(face_parts):
                         feature_masked.append(feature_extraction(face_part))
@@ -729,19 +742,23 @@ class RegistrationPage(ttk.Frame):
                 if self.enable_get_face:
                     bbox_layer, bbox_frame, bbox_location = self.get_bbox_layer(frame)
                     combine_layer = roi(frame,bbox_layer)
-                    faces_loc_list, faces_loc_margin_list = face_detector(bbox_frame)
-                    if faces_loc_list and faces_loc_margin_list:
+                    faces_loc_list = face_detector(bbox_frame)
+                    if faces_loc_list:
                         self.is_detected = True
-                        face_parts, face_angle, layer = get_face(bbox_frame,faces_loc_list[0] ,faces_loc_margin_list[0], True, True)
-                        (x,y,w,h) = bbox_location
-                        croped_combine_layer = roi(combine_layer[y:y+h,x:x+w],layer)
-                        combine_layer[y:y+h,x:x+w] = croped_combine_layer
-                        for i,label in enumerate(self.labels):
-                            if self.check_face_angle(face_angle) == label:
-                                if self.new_user_faces[i] is None and not mask_detector(face_parts[0])[0]:
-                                    self.new_user_faces[i] = face_parts[0]
-                                    self.face_parts[i] = face_parts
-                                    self.is_changed = True
+                        try:
+                            face_parts, face_angle, layer = get_face(bbox_frame, faces_loc_list[0], True, True)
+                        except:
+                            self.is_detected = False
+                        if self.is_detected:
+                            (x,y,w,h) = bbox_location
+                            croped_combine_layer = roi(combine_layer[y:y+h,x:x+w],layer)
+                            combine_layer[y:y+h,x:x+w] = croped_combine_layer
+                            for i,label in enumerate(self.labels):
+                                if self.check_face_angle(face_angle) == label:
+                                    if self.new_user_faces[i] is None and not mask_detector(face_parts[0])[0]:
+                                        self.new_user_faces[i] = face_parts[0]
+                                        self.face_parts[i] = face_parts
+                                        self.is_changed = True
                     else:
                         self.is_detected = False
                     if self.is_detected:
@@ -949,37 +966,48 @@ def rotate_image(image, angle):
 def euclidean_distance(point1, point2):
     return np.sqrt(pow((point2[0]-point1[0]),2)+pow((point2[1]-point1[1]),2))
 
+from utils.image_utils import get_expanded_loc, add_pad
 
-def get_face(frame,face_location,face_location_margin,get_bbox_layer=False,get_axis_layer=False):
-    (x,y,w,h) = face_location_margin
-    face = frame.copy()[y:y+h, x:x+w]
-    landmark, score = get_landmark(face)
+def get_face(frame,face_location,get_bbox_layer=False,get_axis_layer=False):
+    # (x,y,w,h) = face_location
+    # face = frame.copy()[y:y+h, x:x+w]
+    (px, py, pw, ph) = get_expanded_loc(face_location, 0.25)
+    p_face = frame.copy()[py:py+ph, px:px+pw]
+    if p_face is None:
+        p_face =  add_pad(p_face, 0.25)
+    landmark, score = get_landmark(p_face)
     landmark_ = []
     for point in landmark:
-        point_x = int(x+point[0]*face.shape[1])
-        point_y = int(y+point[1]*face.shape[0])
-        point_z = int(y+point[2]*face.shape[1])
+        point_x = int(px+point[0]*p_face.shape[1])
+        point_y = int(py+point[1]*p_face.shape[0])
+        point_z = int(point[2]*p_face.shape[1])
         landmark_.append((point_x,point_y,point_z))
     face_angle = get_face_angle(landmark_)
     rotate_frame = rotate_image(frame.copy(),face_angle[0])
     # 
-    new_faces_loc, new_faces_loc_margin = face_detector(rotate_frame.copy())
-    new_face_loc_margin = find_nearest_box(new_faces_loc_margin, face_location_margin)
+    new_faces_loc = face_detector(rotate_frame.copy())
+    if len(new_faces_loc) < 1 or len :
+        new_face_loc = face_location
+        rotate_frame = frame.copy()
     new_face_loc = find_nearest_box(new_faces_loc, face_location)
-    (nx,ny,nw,nh) = new_face_loc_margin
-    new_face = rotate_frame.copy()[ny:ny+nh, nx:nx+nw]
-    new_landmark, _ = get_landmark(new_face)
+    # (nx,ny,nw,nh) = new_face_loc
+    # new_face = rotate_frame.copy()[ny:ny+nh, nx:nx+nw]
+    (pnx, pny, pnw, pnh) = get_expanded_loc(new_face_loc, 0.25)
+    p_new_face = rotate_frame.copy()[pny:pny+pnh, pnx:pnx+pnw]
+    if p_new_face is None:
+        p_new_face =  add_pad(p_new_face, 0.25)
+    new_landmark, _ = get_landmark(p_new_face)
     new_landmark_ = []
     for point in new_landmark:
-        point_x = int(x+point[0]*new_face.shape[1])
-        point_y = int(y+point[1]*new_face.shape[0])
-        point_z = int(y+point[2]*new_face.shape[1])
+        point_x = int(pnx+point[0]*p_new_face.shape[1])
+        point_y = int(pny+point[1]*p_new_face.shape[0])
+        point_z = int(point[2]*p_new_face.shape[1])
         new_landmark_.append((point_x,point_y,point_z))
     face_parts = face_divider(rotate_frame, new_landmark_, new_face_loc)
     blank_image = np.zeros((frame.shape[0],frame.shape[1],3), np.uint8)
     return_layer = blank_image.copy()
     if get_bbox_layer:
-        return_layer = draw_bbox(return_layer,face_location_margin)
+        return_layer = draw_bbox(return_layer,face_location)
     if get_axis_layer:
         axis_layer = face_axis_layer(frame, landmark_)
         return_layer = roi(return_layer,axis_layer)
@@ -1081,8 +1109,8 @@ class LeftFrame1(tk.Frame):
         tk.Frame.__init__(self,container)
         self.container = container
         self.master = master
-        tk.Label(self,text='Export cico data',font=BOLD_FONT,anchor=W,bg=COLOR[0],fg=COLOR[4]).pack()
-        self.export_btn = tk.Button(self, text='Export', command=lambda:export_cico(master))
+        tk.Label(self,text='Export data',font=BOLD_FONT,anchor=W,bg=COLOR[0],fg=COLOR[4]).pack()
+        self.export_btn = tk.Button(self, text='Export', bg='white',fg='black', command=lambda:export_cico(master))
         self.export_btn.pack()
 
 
@@ -1220,34 +1248,36 @@ class RightFrame3(tk.Frame):
     def delete_user(self, id, event):
         user_remove(self.master, id)
 
-    def reload_user_list(self):   
-        for frame in self.frames:         
-            for frame in self.frames:
-                for widget in frame.winfo_children():
-                    widget.destroy()
-        self.choose_user_btns = []
-        self.delete_user_btns = []
-        if self.master.cur.execute('''SELECT EMP_ID FROM EMPLOYESS''').fetchall():
-            for i,id_ in enumerate(list(dict.fromkeys(self.master.cur.execute('''SELECT EMP_ID FROM EMPLOYESS''').fetchall()))):
-                id_ = id_[0]
-                self.frames.append(tk.Frame(self.frame,bg=COLOR[0]))
-                self.frames[i].pack(fill=X,side=TOP)
-                indexes = [j for j,x in enumerate(self.master.cur.execute('''SELECT EMP_ID FROM EMPLOYESS''').fetchall()) if x[0] == id_]
-                label = self.master.cur.execute('''SELECT EMP_NAME FROM EMPLOYESS''').fetchall()[indexes[0]][0]
-                self.choose_user_btns.append(tk.Label(self.frames[i],text=label))
-                self.choose_user_btns[i].configure(font=NORMAL_FONT,anchor=W,bg=COLOR[0],fg=COLOR[4])
-                self.choose_user_btns[i].bind('<Button-1>', functools.partial(self.choose_user,id_,label))
-                try:
-                    icon_img = ImageTk.PhotoImage(Image.fromarray(cv2.resize(json2array(self.master.cur.execute('''SELECT FACE EMP_EMBS WHERE EMP_ID=?''', ([id_])).fetchall()[random.choice(indexes)][0]),(100,100))))
-                    create_tool_tip(self.choose_user_btns[i],COLOR[1],COLOR[0],'{} (id:{})'.format(label,id_),icon_img)
-                except:
-                    create_tool_tip(self.choose_user_btns[i],COLOR[1],COLOR[0],'{} (id:{})'.format(label,id_))
-                self.delete_user_btns.append(tk.Label(self.frames[i],image=self.bin_icon))
-                self.delete_user_btns[i].configure(anchor=CENTER,bg=COLOR[0])
-                self.delete_user_btns[i].bind('<Button-1>', functools.partial(self.delete_user,id_))
-                create_tool_tip(self.delete_user_btns[i],'red',COLOR[0])
-                self.delete_user_btns[i].pack(side=LEFT,ipady=5,ipadx=5)
-                self.choose_user_btns[i].pack(side=RIGHT,fill=X,ipady=5,expand=True)
+    def reload_user_list(self):
+        pass
+        # for frame in self.frames:         
+        #     for frame in self.frames:
+        #         for widget in frame.winfo_children():
+        #             widget.destroy()
+        # self.choose_user_btns = []
+        # self.delete_user_btns = []
+        # if self.master.cur.execute('''SELECT EMP_ID FROM EMPLOYESS''').fetchall():
+        #     for i,id_ in enumerate(list(dict.fromkeys(self.master.cur.execute('''SELECT EMP_ID FROM EMPLOYESS''').fetchall()))):
+        #         id_ = id_[0]
+        #         self.frames.append(tk.Frame(self.frame,bg=COLOR[0]))
+        #         self.frames[i].pack(fill=X,side=TOP)
+        #         indexes = [j for j,x in enumerate(self.master.cur.execute('''SELECT EMP_ID FROM EMP_EMBS''').fetchall()) if x[0] == id_]
+        #         img_num = len(indexes)
+        #         label = self.master.cur.execute('''SELECT EMP_NAME FROM EMPLOYESS WHERE EMP_ID=?''', ([id_])).fetchall()[0][0]
+        #         self.choose_user_btns.append(tk.Label(self.frames[i],text=label))
+        #         self.choose_user_btns[i].configure(font=NORMAL_FONT,anchor=W,bg=COLOR[0],fg=COLOR[4])
+        #         self.choose_user_btns[i].bind('<Button-1>', functools.partial(self.choose_user,id_,label))
+        #         if img_num !=0:
+        #             icon_img = ImageTk.PhotoImage(Image.fromarray(cv2.resize(json2array(self.master.cur.execute('''SELECT FACE FROM EMP_EMBS WHERE EMP_ID=?''', ([id_])).fetchall()[random.choice(range(img_num))][0]),(100,100))))
+        #             create_tool_tip(self.choose_user_btns[i],COLOR[1],COLOR[0],'{} (id:{})'.format(label,id_),icon_img)
+        #         else:
+        #             create_tool_tip(self.choose_user_btns[i],COLOR[1],COLOR[0],'{} (id:{})'.format(label,id_))
+        #         self.delete_user_btns.append(tk.Label(self.frames[i],image=self.bin_icon))
+        #         self.delete_user_btns[i].configure(anchor=CENTER,bg=COLOR[0])
+        #         self.delete_user_btns[i].bind('<Button-1>', functools.partial(self.delete_user,id_))
+        #         create_tool_tip(self.delete_user_btns[i],'red',COLOR[0])
+        #         self.delete_user_btns[i].pack(side=LEFT,ipady=5,ipadx=5)
+        #         self.choose_user_btns[i].pack(side=RIGHT,fill=X,ipady=5,expand=True)
 
 
 class RightFrame4(tk.Frame):
@@ -1264,11 +1294,11 @@ class RegisterStatus(tk.Frame):
         self.master = master
         labels = []
         pitchs = ['Center','Up','Down']
-        yawns = ['Straight','Left','Right']
+        yawns = ['Straignt','Left','Right']
         for pitch in pitchs:
             for yawn in yawns:
                 labels.append(pitch+' '+yawn)
-        tk.Label(self,text='Register Status',font=BOLD_FONT,bg=COLOR[0],fg=COLOR[4]).pack(side=TOP,fill=BOTH,ipady=10)
+        tk.Label(self,text='Register status',font=BOLD_FONT,bg=COLOR[0],fg=COLOR[4]).pack(side=TOP,fill=BOTH,ipady=10)
         self.left_frame = tk.Frame(self,bg=COLOR[0])
         self.left_frame.pack(side=LEFT,fill=BOTH,expand=True)
         self.right_frame = tk.Frame(self,bg=COLOR[0])
@@ -1328,27 +1358,53 @@ class UserList(tk.Frame):
         self.choose_user_btns = []
         self.delete_user_btns = []
         if self.master.cur.execute('''SELECT EMP_ID FROM EMPLOYESS''').fetchall():
-            for i,id_ in enumerate(list(dict.fromkeys(self.master.cur.execute('''SELECT EMP_ID FROM EMPLOYESS''').fetchall()))):
+            for i, id_ in enumerate(list(dict.fromkeys(self.master.cur.execute('''SELECT EMP_ID FROM EMPLOYESS''').fetchall()))):
                 id_ = id_[0]
-                self.frames.append(tk.Frame(self.frame,bg=COLOR[0]))
-                self.frames[i].pack(fill=X,side=TOP)
-                indexes = [j for j,x in enumerate(self.master.cur.execute('''SELECT EMP_ID FROM EMPLOYESS''').fetchall()) if x[0] == id_]
-                label = self.master.cur.execute('''SELECT EMP_NAME FROM EMPLOYESS''').fetchall()[indexes[0]][0]
-                self.choose_user_btns.append(tk.Label(self.frames[i],text=label))
-                self.choose_user_btns[i].configure(font=NORMAL_FONT,anchor=W,bg=COLOR[0],fg=COLOR[4])
-                self.choose_user_btns[i].bind('<Button-1>', functools.partial(self.choose_user,id_,label))
-                try:
-                    icon_img = ImageTk.PhotoImage(Image.fromarray(cv2.resize(json2array(self.master.cur.execute('''SELECT FACE FROM EMP_EMBS WHERE EMP_ID=?''', ([id_])).fetchall()[random.choice(indexes)][0]),(100,100))))
-                    create_tool_tip(self.choose_user_btns[i],COLOR[1],COLOR[0],'{} (id:{})'.format(label,id_),icon_img)
-                except:
-                    create_tool_tip(self.choose_user_btns[i],COLOR[1],COLOR[0],'{} (id:{})'.format(label,id_))
-                self.delete_user_btns.append(tk.Label(self.frames[i],image=self.bin_icon))
-                self.delete_user_btns[i].configure(anchor=CENTER,bg=COLOR[0])
-                self.delete_user_btns[i].bind('<Button-1>', functools.partial(self.delete_user,id_))
-                create_tool_tip(self.delete_user_btns[i],'red',COLOR[0])
-                self.delete_user_btns[i].pack(side=LEFT,ipady=5,ipadx=5)
-                self.choose_user_btns[i].pack(side=RIGHT,fill=X,ipady=5,expand=True)
+                self.add_user(id_)
 
+    def add_user(self, id_):
+        id_ = int(id_)
+        frame = tk.Frame(self.frame,bg=COLOR[0])
+        self.frames.append(frame)
+        frame.pack(fill=X,side=TOP)
+        indexes = [j for j,x in enumerate(self.master.cur.execute('''SELECT EMP_ID FROM EMP_EMBS''').fetchall()) if x[0] == id_]
+        img_num = len(indexes)
+        label = self.master.cur.execute('''SELECT EMP_NAME FROM EMPLOYESS WHERE EMP_ID=?''', ([id_])).fetchall()[0][0]
+        choose_user_btn = tk.Label(frame,text=label)
+        self.choose_user_btns.append(choose_user_btn )
+        choose_user_btn.configure(font=NORMAL_FONT,anchor=W,bg=COLOR[0],fg=COLOR[4])
+        choose_user_btn.bind('<Button-1>', functools.partial(self.choose_user,id_,label))
+        if img_num !=0:
+            icon_img = ImageTk.PhotoImage(Image.fromarray(cv2.resize(json2array(self.master.cur.execute('''SELECT FACE FROM EMP_EMBS WHERE EMP_ID=?''', ([id_])).fetchall()[random.choice(range(img_num))][0]),(100,100))))
+            create_tool_tip(choose_user_btn,COLOR[1],COLOR[0],'{} (id:{})'.format(label,id_),icon_img)
+        else:
+            create_tool_tip(choose_user_btn,COLOR[1],COLOR[0],'{} (id:{})'.format(label,id_))
+        deleta_user_btn = tk.Label(frame,image=self.bin_icon)
+        self.delete_user_btns.append(deleta_user_btn)
+        deleta_user_btn.configure(anchor=CENTER,bg=COLOR[0])
+        deleta_user_btn.bind('<Button-1>', functools.partial(self.delete_user,id_))
+        create_tool_tip(deleta_user_btn,'red',COLOR[0])
+        deleta_user_btn.pack(side=LEFT,ipady=5,ipadx=5)
+        choose_user_btn.pack(side=RIGHT,fill=X,ipady=5,expand=True)
+
+    def remove_user(self, id_):
+        id_ = int(id_)
+        if self.master.cur.execute('''SELECT EMP_ID FROM EMPLOYESS''').fetchall():
+            for i, id__ in enumerate(list(dict.fromkeys(self.master.cur.execute('''SELECT EMP_ID FROM EMPLOYESS''').fetchall()))):
+                if id_ == id__[0]:
+                    self.choose_user_btns[i].pack_forget()
+                    self.delete_user_btns[i].pack_forget()
+                    for widget in self.frames[i].winfo_children():
+                        widget.destroy()
+                    self.frames[i].pack_forget()
+                    self.frames.pop(i)
+                    self.choose_user_btns.pop(i)
+                    self.delete_user_btns.pop(i)
+    
+    def update_user(self, id_):
+        id_ = int(id_)
+        self.remove_user(id_)
+        self.add_user(id_)
 
 class ProcessPopup(object):
     def __init__(self, parent):

@@ -41,7 +41,10 @@ height, width = input_shape[1:3]
 def get_landmark(pixels):
     image = pixels
     # chuẩn hóa ảnh ngõ vào
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    try:
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    except:
+        image_rgb = image.copy()
     factor = min(height/pixels.shape[0],width/pixels.shape[1])
     interpolation = cv2.INTER_CUBIC if factor > 1 else cv2.INTER_AREA
     image_resized = cv2.resize(image_rgb, (width, height), interpolation=interpolation)

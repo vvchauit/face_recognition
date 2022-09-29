@@ -7,8 +7,8 @@ def evaluate(embeddings, actual_issame, threshold):
     # Calculate evaluation metrics
     embeddings1 = [embeddings[i] for i in range(len(embeddings)) if i%2==0]
     embeddings2 = [embeddings[i] for i in range(len(embeddings)) if i%2!=0]
-    accuracy, precision, recall = calculate_accuracy(embeddings1, embeddings2, threshold, np.asarray(actual_issame))
-    return accuracy, precision, recall
+    tp, fp, tn, fn, accuracy, precision, recall = calculate_accuracy(embeddings1, embeddings2, threshold, np.asarray(actual_issame))
+    return tp, fp, tn, fn, accuracy, precision, recall
 
 def get_paths(lfw_dir, pairs):
     nrof_skipped_pairs = 0

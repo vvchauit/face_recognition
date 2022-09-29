@@ -5,7 +5,7 @@ import numpy as np
 
 
 pair_filename_path = 'dataset/lfw/pairs.txt'
-lfw_dir = 'dataset\\lfw\\lfw'
+lfw_dir = 'dataset/lfw/mask'
 thresholds = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
 pairs = lfw.read_pairs(pair_filename_path)
@@ -21,13 +21,13 @@ for i in range(len(paths)):
         embedding1 = feature_extraction(img1)
         embeddings += (embedding0, embedding1)
 
-np.save('dataset/lfw/embedding.npy', embeddings)
-# embeddings = np.load('dataset/lfw/embedding.npy')
+np.save('dataset/embedding_mask.npy', embeddings)
+# embeddings = np.load('dataset/tripletloss_embs.npy')
 
 for threshold in thresholds:
     print('---------------------------------------')
 
-    accuracy, precision, recall = lfw.evaluate(embeddings, actual_issame, threshold)
+    tp, fp, tn, fn, accuracy, precision, recall = lfw.evaluate(embeddings, actual_issame, threshold)
 
     f1_score = 0 if (precision+recall==0) else 2*precision*recall/(precision+recall)
         
